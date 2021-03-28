@@ -1,0 +1,9 @@
+/node_modules/
+url_list.csv
+.env
+npm-debug.log
+.DS_Store
+/*.env
+.idea/
+combined.log
+error.log
