@@ -8,7 +8,7 @@ function cssSelector(tag) {
     const cssSelectors = {
         'id': '#',
         'class': '.',
-        '': '',
+        '': '', // this is so we can select by attribute name input[data-attr='something']
     }
 
     return `${tag['type']}${cssSelectors[tag['attr']]}${tag['value']}`

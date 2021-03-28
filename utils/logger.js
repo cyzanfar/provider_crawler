@@ -24,6 +24,7 @@ const logger = new winston.createLogger({
             createLogGroup: false,
             createLogStream: true,
             batchSize: 20,
+            handleExceptions: true,
             awsConfig: {
                 accessKeyId: process.env.AWS_ACCESS_ID,
                 secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,

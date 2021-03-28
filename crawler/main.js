@@ -1,7 +1,7 @@
 const puppeteer = require('puppeteer-extra');
-const StealthPlugin =  require('puppeteer-extra-plugin-stealth');
-
 const moment = require('moment');
+
+const StealthPlugin =  require('puppeteer-extra-plugin-stealth');
 
 const { PROVIDERS } = require('../data/providers');
 const { logger }  = require('../utils/logger');
@@ -11,12 +11,7 @@ const { cssSelector, DOMElementPresenceCheck,
     keyboardTypeAction, getSelectionOption
 } = require('../utils/helpers');
 
-const {fillMonth, fillDay, fillYear,
-    fillName, fillSSN, fillFullDOB,
-    fillZipcode, fillStreetAddressNumber,
-    fillUserId, fillPassword, fillState,
-    fillPasswordConfirmation, fillPhoneNumber,
-    fillExtraFields, fillCity, fillEmail, fillAddressLine1 } = require('./field_filler')
+const { FieldFiller } = require('./field_filler')
 
 const { browserOptions, blockedResourceTypes, skippedResources } = require('./browser_options')
 puppeteer.use(StealthPlugin())
@@ -46,9 +41,16 @@ async function startCrawl(
 
         if (instruct['has_default_recaptcha']) continue;
 
-        logger.info(`navigating to side ${provider['name']}`);
+        logger.info(`Processing ${provider['name']}`);
 
-        await loadPage(page, provider['url']);
+        try {
+            await loadPage(page, provider['url']);
+        } catch (e) {
+            logger.error(`${p} | REQUEST FAILED | error: ${e}`)
+            console.log('ERROR', e)
+            continue
+        }
+
 
         try {
             if (!instruct['multistep']) {
@@ -58,6 +60,7 @@ async function startCrawl(
             }
         } catch (e) {
             logger.error(`Crawler failed for provider ${provider['name']} with error: ${e}`)
+            console.log('CRAWL ERROR', e)
         }
     }
 
@@ -236,7 +239,7 @@ async function inputStateField(page, state, field, sitename) {
     }
     else {
         isValidFieldInstruct(field);
-        await fillState(page, field['fill_element'], state);
+        await FieldFiller.fillState(page, field['fill_element'], state);
     }
 }
 
@@ -330,48 +333,48 @@ async function executeClick(page, selector) {
 async function inputStreetAddressNumber(page, streetAddrNum, field) {
     isValidFieldInstruct(field);
 
-    await fillStreetAddressNumber(page, field['fill_element'], streetAddrNum)
+    await FieldFiller.fillStreetAddressNumber(page, field['fill_element'], streetAddrNum)
 }
 
 async function inputZipcode(page, zipcode, field) {
     isValidFieldInstruct(field);
-    await fillZipcode(page, field['fill_element'], zipcode);
+    await FieldFiller.fillZipcode(page, field['fill_element'], zipcode);
 }
 
 async function inputPassword(page, password, field) {
     isValidFieldInstruct(field);
-    await fillPassword(page, field['fill_element'], password);
+    await FieldFiller.fillPassword(page, field['fill_element'], password);
 }
 
 async function inputPhoneNumber(page, phoneNumber, field) {
     isValidFieldInstruct(field);
-    await fillPhoneNumber(page, field['fill_element'], phoneNumber);
+    await FieldFiller.fillPhoneNumber(page, field['fill_element'], phoneNumber);
 }
 
 async function inputPasswordConfirmation(page, password, field) {
     isValidFieldInstruct(field);
-    await fillPasswordConfirmation(page, field['fill_element'], password);
+    await FieldFiller.fillPasswordConfirmation(page, field['fill_element'], password);
 }
 
 async function inputCity(page, userId, field) {
     isValidFieldInstruct(field);
-    await fillCity(page, field['fill_element'], userId);
+    await FieldFiller.fillCity(page, field['fill_element'], userId);
 }
 
 
 async function inputAddressLine(page, addressLine1, field) {
     isValidFieldInstruct(field);
-    await fillAddressLine1(page, field['fill_element'], addressLine1);
+    await FieldFiller.fillAddressLine1(page, field['fill_element'], addressLine1);
 }
 
 async function inputEmail(page, email, field) {
     isValidFieldInstruct(field);
-    await fillEmail(page, field['fill_element'], email);
+    await FieldFiller.fillEmail(page, field['fill_element'], email);
 }
 
 async function inputUserId(page, userId, field) {
     isValidFieldInstruct(field);
-    await fillUserId(page, field['fill_element'], userId);
+    await FieldFiller.fillUserId(page, field['fill_element'], userId);
 }
 
 async function inputDOB(page, dob, field) {
@@ -382,18 +385,18 @@ async function inputDOB(page, dob, field) {
 
     const dobToDate = moment(dob).utc();
 
-    if ('fill_element' in field) await fillFullDOB(
+    if ('fill_element' in field) await FieldFiller.fillFullDOB(
         page, dobField, dobToDate.format(field['format']))
 
     if ('multi_field_fill_element' in field) {
 
-        if (dobField['month']) await fillMonth(
+        if (dobField['month']) await FieldFiller.fillMonth(
                 page, dobField['month'], getMonth(dobToDate));
 
-        if (dobField['day']) await fillDay(
+        if (dobField['day']) await FieldFiller.fillDay(
             page, dobField['day'], getDay(dobToDate));
 
-        if (dobField['year']) await fillYear(
+        if (dobField['year']) await FieldFiller.fillYear(
             page, dobField['year'], getYear(dobToDate));
 
         if (dobField['extra_fields']) {
@@ -410,7 +413,7 @@ async function inputExtraFields(page, extraFields, dobToDate) {
             page,
             extraFields['full_dob_iso']);
 
-        await fillExtraFields(
+        await FieldFiller.fillExtraFields(
             page,
             extraFields['full_dob_iso'],
             dobToDate.format('YYYY-MM-DD'));
@@ -420,14 +423,14 @@ async function inputExtraFields(page, extraFields, dobToDate) {
 async function inputSSN(page, ssn, field) {
     isValidFieldInstruct(field);
 
-    await fillSSN(page,field['fill_element'], ssn);
+    await FieldFiller.fillSSN(page,field['fill_element'], ssn);
 }
 
 
 async function inputNameField(page, name, field) {
     isValidFieldInstruct(field);
 
-    await fillName(page, field['fill_element'], name);
+    await FieldFiller.fillName(page, field['fill_element'], name);
 
 }
 
@@ -447,7 +450,7 @@ const getDay = (dobToDate) => {
 
 async function loadPage(page, url) {
     return await page.goto(url, {
-        waitUntil: 'networkidle2'
+        waitUntil: 'networkidle2', timeout: 10000
     })
 }
 
@@ -468,8 +471,8 @@ const data = {
 }
 
 const defaultProv = [
-    'Fidelity Investments',
-    'Voya Financial',
+    // 'Fidelity Investments',
+    // 'Voya Financial',
     'Principal Financial Group',
     'MassMutual',
     'OneAmerica',
