@@ -22,7 +22,6 @@ async function startCrawl(
     sites,
     browserOptions,
     data,
-    defaultProv = null
 ) {
     const browser = await puppeteer.launch(
         browserOptions || {});
