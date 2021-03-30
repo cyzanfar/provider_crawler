@@ -2,7 +2,7 @@ const puppeteer = require('puppeteer-extra');
 const moment = require('moment');
 
 const StealthPlugin =  require('puppeteer-extra-plugin-stealth');
-
+const ProviderSelector = require('../models/selectors');
 const { PROVIDERS } = require('../data/providers');
 const { logger }  = require('../utils/logger');
 
@@ -26,24 +26,17 @@ async function startCrawl(
     const browser = await puppeteer.launch(
         browserOptions || {});
 
-    const prov = PROVIDERS
+    const prov = await ProviderSelector.getProviders({'defaultCaptcha': false})
     const page = await browser.newPage();
 
     await skipAssetDownload(page)
 
-    const prov_names = defaultProv || prov
-    for (const p of prov_names) {
+    for (const p of prov) {
 
-        const provider = prov[p];
-        const instruct = provider['instruction'];
-
-
-        if (instruct['has_default_recaptcha']) continue;
-
-        logger.info(`Processing ${provider['name']}`);
+        logger.info(`Processing ${p.name}`);
 
         try {
-            await loadPage(page, provider['url']);
+            await loadPage(page, p.url);
         } catch (e) {
             logger.error(`${p} | REQUEST FAILED | error: ${e}`)
             console.log('ERROR', e)
@@ -52,13 +45,16 @@ async function startCrawl(
 
 
         try {
-            if (!instruct['multistep']) {
-                await singleStepRegistration(page, instruct, provider['name'], data);
-            } else if (instruct['multistep']) {
-                await multiStepRegistration(page, instruct, provider['name'], data)
+            await loadPage(page, p.url);
+            if (!p.instruct.multistep) {
+                await singleStepRegistration(page, p.instruct, p.name, data);
+
+            }
+            else if (p.instruct.multistep) {
+                await multiStepRegistration(page,  p.instruct, p.name, data)
             }
         } catch (e) {
-            logger.error(`Crawler failed for provider ${provider['name']} with error: ${e}`)
+            logger.error(`Crawler failed for provider ${p.name} with error: ${e}`)
             console.log('CRAWL ERROR', e)
         }
     }
