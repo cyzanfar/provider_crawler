@@ -5,6 +5,8 @@ const StealthPlugin =  require('puppeteer-extra-plugin-stealth');
 const ProviderSelector = require('../models/selectors');
 const { PROVIDERS } = require('../data/providers');
 const { logger }  = require('../utils/logger');
+const { CrawlerExecution } = require('../models/provider');
+
 
 const { cssSelector, DOMElementPresenceCheck,
     keyboardPressAction, isValidFieldInstruct,
@@ -33,6 +35,9 @@ async function startCrawl(
 
     for (const p of prov) {
 
+        const crawlerTracker = await CrawlerExecution.build(
+            {userExternalId: data['id'], provider: p.name})
+
         logger.info(`Processing ${p.name}`);
 
         try {
@@ -40,6 +45,8 @@ async function startCrawl(
         } catch (e) {
             logger.error(`${p} | REQUEST FAILED | error: ${e}`)
             console.log('ERROR', e)
+            crawlerTracker.failedProviderCrawl = true;
+            await crawlerTracker.save();
             continue
         }
 
@@ -47,15 +54,17 @@ async function startCrawl(
         try {
             await loadPage(page, p.url);
             if (!p.instruct.multistep) {
-                await singleStepRegistration(page, p.instruct, p.name, data);
+                await singleStepRegistration(page, p.instruct, p.name, data, crawlerTracker);
 
             }
             else if (p.instruct.multistep) {
-                await multiStepRegistration(page,  p.instruct, p.name, data)
+                await multiStepRegistration(page,  p.instruct, p.name, data, crawlerTracker)
             }
         } catch (e) {
             logger.error(`Crawler failed for provider ${p.name} with error: ${e}`)
             console.log('CRAWL ERROR', e)
+            crawlerTracker.failedProviderCrawl = true;
+            await crawlerTracker.save();
         }
     }
 
@@ -79,7 +88,7 @@ async function skipAssetDownload(page) {
     });
 }
 
-async function multiStepRegistration(page, instruct, sitename) {
+async function multiStepRegistration(page, instruct, sitename, data, crawlerTracker) {
     const steps = instruct['steps'];
 
     for (const step in steps) {
@@ -110,18 +119,18 @@ async function multiStepRegistration(page, instruct, sitename) {
             }
         }
     }
-    await submitForm(page, instruct, sitename)
+    await submitForm(page, instruct, sitename, crawlerTracker)
 }
 
 
-async function singleStepRegistration(page, instruct, sitename) {
+async function singleStepRegistration(page, instruct, sitename, data, crawlerTracker) {
     if (instruct['presence_selector']) await DOMElementPresenceCheck(
         page, instruct['presence_selector']);
 
     if (instruct['fields']) {
         await formFieldFiller(page, instruct['fields'], sitename, data)
     }
-    await submitForm(page, instruct, sitename)
+    await submitForm(page, instruct, sitename, crawlerTracker)
 }
 
 
@@ -238,7 +247,7 @@ async function inputStateField(page, state, field, sitename) {
     }
 }
 
-async function submitForm(page, instruct, sitename) {
+async function submitForm(page, instruct, sitename, crawlerTracker) {
     if (instruct['submission']) {
         await formSubmission(
             page,
@@ -253,10 +262,13 @@ async function submitForm(page, instruct, sitename) {
         let result = await checkValidError(
             page,
             instruct['failing_criteria']['element'],
-            instruct['failing_criteria']['expected_message']);
+            instruct['failing_criteria']['expected_message'],
+            crawlerTracker);
 
         if (result) {
             logger.info(`${sitename}, no account here`);
+            crawlerTracker.hasProviderMatch = false;
+            await crawlerTracker.save();
         }
     }
 }
@@ -284,16 +296,19 @@ async function executeKeyboardAction(page, actions) {
 }
 
 
-async function checkValidError(page, elem, expectedMsq) {
+async function checkValidError(page, elem, expectedMsq, crawlerTracker) {
     let selector = cssSelector(elem);
 
-    return await page.evaluate((elem, selector, expectedMsq) => {
+    const errorText = await page.evaluate((elem, selector) => {
 
         let el = document.querySelector(selector);
-        console.log(el.innerText)
-        return el.innerText.includes(expectedMsq);
+        return el.innerText;
 
     }, elem, selector, expectedMsq);
+
+    crawlerTracker.errorMessage = errorText;
+
+    return errorText.includes(expectedMsq)
 }
 
 
@@ -451,6 +466,7 @@ async function loadPage(page, url) {
 
 
 const data = {
+    'id': 1,
     'first_name': 'Dandi',
     'last_name': 'Levi',
     'dob': '1987-02-12',
