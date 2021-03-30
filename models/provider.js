@@ -98,14 +98,18 @@ const CrawlerExecution = sequelize.define('CrawlerExecution', {
         type: DataTypes.BOOLEAN,
         allowNull: false,
     },
-    providerMatches: {
-        type: DataTypes.ARRAY(DataTypes.STRING),
+    provider: {
+        type: DataTypes.STRING,
         allowNull: true
     },
     failedProviderCrawl: {
-        type: DataTypes.ARRAY(DataTypes.STRING),
+        type: DataTypes.STRING,
         allowNull: true
     },
+    errorMessage: {
+        type: DataTypes.TEXT,
+        allowNull: true
+    }
 }, {
     tableName: 'crawler_execution'
 });
