@@ -31,7 +31,7 @@ const Instructor = sequelize.define('Instructor', {
         autoIncrement: true,
         primaryKey: true
     },
-    defaultCaptcha: {
+    has_default_recaptcha: {
         type: DataTypes.BOOLEAN,
         allowNull: false
     },
@@ -39,11 +39,11 @@ const Instructor = sequelize.define('Instructor', {
         type: DataTypes.BOOLEAN,
         allowNull: false
     },
-    failingCriteria: {
+    failing_criteria: {
         type: DataTypes.JSONB,
         allowNull: false
     },
-    presenceSelector: {
+    presence_selector: {
         type: DataTypes.JSONB,
         allowNull: true
     },
@@ -98,23 +98,27 @@ const CrawlerExecution = sequelize.define('CrawlerExecution', {
         type: DataTypes.BOOLEAN,
         allowNull: false,
     },
-    providerMatches: {
-        type: DataTypes.ARRAY(DataTypes.STRING),
+    provider: {
+        type: DataTypes.STRING,
         allowNull: true
     },
     failedProviderCrawl: {
-        type: DataTypes.ARRAY(DataTypes.STRING),
+        type: DataTypes.STRING,
         allowNull: true
     },
+    errorMessage: {
+        type: DataTypes.TEXT,
+        allowNull: true
+    }
 }, {
     tableName: 'crawler_execution'
 });
 
 
 
-Instructor.associate = function(models) {
-    Instructor.belongsTo(models.Provider, {foreignKey: 'providerId', as: 'provider'})
-};
+
+Instructor.belongsTo(Provider, {foreignKey: 'providerId', as: 'provider'})
+Provider.hasOne(Instructor, {foreignKey: 'providerId', as: 'instruct'})
 
 module.exports = {
     Provider,

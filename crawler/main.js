@@ -2,9 +2,11 @@ const puppeteer = require('puppeteer-extra');
 const moment = require('moment');
 
 const StealthPlugin =  require('puppeteer-extra-plugin-stealth');
-
+const ProviderSelector = require('../models/selectors');
 const { PROVIDERS } = require('../data/providers');
 const { logger }  = require('../utils/logger');
+const { CrawlerExecution } = require('../models/provider');
+
 
 const { cssSelector, DOMElementPresenceCheck,
     keyboardPressAction, isValidFieldInstruct,
@@ -22,45 +24,47 @@ async function startCrawl(
     sites,
     browserOptions,
     data,
-    defaultProv = null
 ) {
     const browser = await puppeteer.launch(
         browserOptions || {});
 
-    const prov = PROVIDERS
+    const prov = await ProviderSelector.getProviders({'has_default_recaptcha': false})
     const page = await browser.newPage();
 
     await skipAssetDownload(page)
 
-    const prov_names = defaultProv || prov
-    for (const p of prov_names) {
+    for (const p of prov) {
 
-        const provider = prov[p];
-        const instruct = provider['instruction'];
+        const crawlerTracker = await CrawlerExecution.build(
+            {userExternalId: data['id'], provider: p.name})
 
-
-        if (instruct['has_default_recaptcha']) continue;
-
-        logger.info(`Processing ${provider['name']}`);
+        logger.info(`Processing ${p.name}`);
 
         try {
-            await loadPage(page, provider['url']);
+            await loadPage(page, p.url);
         } catch (e) {
             logger.error(`${p} | REQUEST FAILED | error: ${e}`)
             console.log('ERROR', e)
+            crawlerTracker.failedProviderCrawl = true;
+            await crawlerTracker.save();
             continue
         }
 
 
         try {
-            if (!instruct['multistep']) {
-                await singleStepRegistration(page, instruct, provider['name'], data);
-            } else if (instruct['multistep']) {
-                await multiStepRegistration(page, instruct, provider['name'], data)
+            await loadPage(page, p.url);
+            if (!p.instruct.multistep) {
+                await singleStepRegistration(page, p.instruct, p.name, data, crawlerTracker);
+
+            }
+            else if (p.instruct.multistep) {
+                await multiStepRegistration(page,  p.instruct, p.name, data, crawlerTracker)
             }
         } catch (e) {
-            logger.error(`Crawler failed for provider ${provider['name']} with error: ${e}`)
+            logger.error(`Crawler failed for provider ${p.name} with error: ${e}`)
             console.log('CRAWL ERROR', e)
+            crawlerTracker.failedProviderCrawl = true;
+            await crawlerTracker.save();
         }
     }
 
@@ -84,7 +88,7 @@ async function skipAssetDownload(page) {
     });
 }
 
-async function multiStepRegistration(page, instruct, sitename) {
+async function multiStepRegistration(page, instruct, sitename, data, crawlerTracker) {
     const steps = instruct['steps'];
 
     for (const step in steps) {
@@ -115,18 +119,18 @@ async function multiStepRegistration(page, instruct, sitename) {
             }
         }
     }
-    await submitForm(page, instruct, sitename)
+    await submitForm(page, instruct, sitename, crawlerTracker)
 }
 
 
-async function singleStepRegistration(page, instruct, sitename) {
+async function singleStepRegistration(page, instruct, sitename, data, crawlerTracker) {
     if (instruct['presence_selector']) await DOMElementPresenceCheck(
         page, instruct['presence_selector']);
 
     if (instruct['fields']) {
         await formFieldFiller(page, instruct['fields'], sitename, data)
     }
-    await submitForm(page, instruct, sitename)
+    await submitForm(page, instruct, sitename, crawlerTracker)
 }
 
 
@@ -243,7 +247,7 @@ async function inputStateField(page, state, field, sitename) {
     }
 }
 
-async function submitForm(page, instruct, sitename) {
+async function submitForm(page, instruct, sitename, crawlerTracker) {
     if (instruct['submission']) {
         await formSubmission(
             page,
@@ -258,10 +262,13 @@ async function submitForm(page, instruct, sitename) {
         let result = await checkValidError(
             page,
             instruct['failing_criteria']['element'],
-            instruct['failing_criteria']['expected_message']);
+            instruct['failing_criteria']['expected_message'],
+            crawlerTracker);
 
         if (result) {
             logger.info(`${sitename}, no account here`);
+            crawlerTracker.hasProviderMatch = false;
+            await crawlerTracker.save();
         }
     }
 }
@@ -289,16 +296,19 @@ async function executeKeyboardAction(page, actions) {
 }
 
 
-async function checkValidError(page, elem, expectedMsq) {
+async function checkValidError(page, elem, expectedMsq, crawlerTracker) {
     let selector = cssSelector(elem);
 
-    return await page.evaluate((elem, selector, expectedMsq) => {
+    const errorText = await page.evaluate((elem, selector) => {
 
         let el = document.querySelector(selector);
-        console.log(el.innerText)
-        return el.innerText.includes(expectedMsq);
+        return el.innerText;
 
     }, elem, selector, expectedMsq);
+
+    crawlerTracker.errorMessage = errorText;
+
+    return errorText.includes(expectedMsq)
 }
 
 
@@ -456,6 +466,7 @@ async function loadPage(page, url) {
 
 
 const data = {
+    'id': 1,
     'first_name': 'Dandi',
     'last_name': 'Levi',
     'dob': '1987-02-12',

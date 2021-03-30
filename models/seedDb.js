@@ -9,10 +9,10 @@ const { Provider, Instructor } = require('./provider');
 
             const instruct = await Instructor.create(
                 {
-                    defaultCaptcha: PROVIDERS[p]['instruction']['has_default_recaptcha'],
+                    has_default_recaptcha: PROVIDERS[p]['instruction']['has_default_recaptcha'],
                     multistep: PROVIDERS[p]['instruction']['multistep'],
-                    presenceSelector: PROVIDERS[p]['instruction']['presence_selector'],
-                    failingCriteria: PROVIDERS[p]['instruction']['failing_criteria'],
+                    presence_selector: PROVIDERS[p]['instruction']['presence_selector'],
+                    failing_criteria: PROVIDERS[p]['instruction']['failing_criteria'],
                     submission: PROVIDERS[p]['instruction']['submission'],
                     fields: PROVIDERS[p]['instruction']['fields'],
                     steps: PROVIDERS[p]['instruction']['steps'],
@@ -20,7 +20,6 @@ const { Provider, Instructor } = require('./provider');
                 },
             )
 
-            console.log(instruct.presenceSelector)
             console.log(provider instanceof Provider);
             console.log(provider.name);
         } catch (e) {
