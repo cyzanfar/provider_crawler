@@ -26,7 +26,7 @@ async function startCrawl(
     const browser = await puppeteer.launch(
         browserOptions || {});
 
-    const prov = await ProviderSelector.getProviders({'defaultCaptcha': false})
+    const prov = await ProviderSelector.getProviders({'has_default_recaptcha': false})
     const page = await browser.newPage();
 
     await skipAssetDownload(page)

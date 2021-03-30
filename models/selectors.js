@@ -8,7 +8,7 @@ class ProviderSelector {
         return await this.model.findAll({
             include: [{
                 model: this.relation,
-                as: 'instructor',
+                as: 'instruct',
                 where: filters
             }],
         });
